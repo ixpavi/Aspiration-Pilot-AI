@@ -9,12 +9,17 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Plus, X } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { GUEST_PROFILE } from "@/lib/AuthProvider";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type CareerGoals = NonNullable<Profile["career_goals"]>;
 type JobPreferences = NonNullable<Profile["job_preferences"]>;
 
-export function CareerPreferences() {
+interface Props {
+  guestProfile?: typeof GUEST_PROFILE;
+}
+
+export function CareerPreferences({ guestProfile }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -26,8 +31,24 @@ export function CareerPreferences() {
   const [remoteOnly, setRemoteOnly] = useState(false);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (guestProfile) {
+      setProfile(guestProfile as any);
+      if (guestProfile.job_preferences) {
+        setRemoteOnly(guestProfile.job_preferences.remoteOnly);
+        setMinimumSalary(guestProfile.job_preferences.minimumSalary?.toString() || "");
+      }
+      setLoading(false);
+    } else {
+      loadProfile();
+    }
+  }, [guestProfile]);
+
+  function showGuestToast() {
+    toast({
+      title: "Create an account to save",
+      description: "Sign up for free to save your career goals and preferences.",
+    });
+  }
 
   async function loadProfile() {
     try {
@@ -60,6 +81,7 @@ export function CareerPreferences() {
 
   async function updateCareerGoals(goals: Partial<CareerGoals>) {
     if (!profile) return;
+    if (guestProfile) { showGuestToast(); return; }
 
     try {
       const updatedGoals = {
@@ -94,6 +116,7 @@ export function CareerPreferences() {
 
   async function updateJobPreferences(preferences: Partial<JobPreferences>) {
     if (!profile) return;
+    if (guestProfile) { showGuestToast(); return; }
 
     try {
       const updatedPreferences = {

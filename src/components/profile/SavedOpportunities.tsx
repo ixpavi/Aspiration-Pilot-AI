@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Bookmark } from "lucide-react";
+import { GUEST_PROFILE } from "@/lib/AuthProvider";
 
 type JobMatch = {
   title: string;
@@ -52,14 +53,25 @@ const defaultCourses: SavedCourse[] = [
   },
 ];
 
-export function SavedOpportunities() {
+interface Props {
+  guestProfile?: typeof GUEST_PROFILE;
+}
+
+export function SavedOpportunities({ guestProfile }: Props) {
   const { toast } = useToast();
-  const [loadingMatches, setLoadingMatches] = useState(true);
-  const [jobMatches, setJobMatches] = useState<JobMatch[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(!guestProfile);
+  const [jobMatches, setJobMatches] = useState<JobMatch[]>(
+    guestProfile ? (guestProfile.job_matches as JobMatch[]) : []
+  );
   const [courses, setCourses] = useState<SavedCourse[]>(defaultCourses);
-  const [showAllMatches, setShowAllMatches] = useState(false);
+  const [showAllMatches, setShowAllMatches] = useState(!!guestProfile); // guests see all matches by default
 
   useEffect(() => {
+    if (guestProfile) {
+      // Guest data already loaded in initial state — nothing to do
+      setLoadingMatches(false);
+      return;
+    }
     const storedCourses =
       typeof window !== "undefined"
         ? window.localStorage.getItem("aspiration-saved-courses")

@@ -6,14 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { GUEST_PROFILE } from "@/lib/AuthProvider";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type SkillAssessment = NonNullable<Profile["skill_assessments"]>[number];
 type CareerProgress = NonNullable<Profile["career_progression"]>[number];
 
-export function CareerProgress() {
+interface Props {
+  guestProfile?: typeof GUEST_PROFILE;
+}
+
+export function CareerProgress({ guestProfile }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -23,8 +28,21 @@ export function CareerProgress() {
   const [newAchievement, setNewAchievement] = useState("");
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (guestProfile) {
+      // Use guest demo data directly — no Supabase call needed
+      setProfile(guestProfile as any);
+      setLoading(false);
+    } else {
+      loadProfile();
+    }
+  }, [guestProfile]);
+
+  function showGuestToast() {
+    toast({
+      title: "Create an account to save",
+      description: "Sign up for free to track your skills and progress.",
+    });
+  }
 
   async function loadProfile() {
     try {
@@ -48,10 +66,12 @@ export function CareerProgress() {
     } finally {
       setLoading(false);
     }
+
   }
 
   async function addSkill() {
     if (!profile || !newSkill.trim()) return;
+    if (guestProfile) { showGuestToast(); return; }
 
     try {
       const newSkillAssessment: SkillAssessment = {

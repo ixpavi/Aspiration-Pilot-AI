@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getSkillRecommendations, getSkillProgressInsights } from "@/lib/skill-recommendations";
 import { ArrowUp, ArrowRight, Minus, Loader2, TrendingUp, Award } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { GUEST_PROFILE } from "@/lib/AuthProvider";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -26,7 +27,11 @@ interface SkillInsight {
   message: string;
 }
 
-export function SkillRecommendations() {
+interface Props {
+  guestProfile?: typeof GUEST_PROFILE;
+}
+
+export function SkillRecommendations({ guestProfile }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -34,8 +39,23 @@ export function SkillRecommendations() {
   const [insights, setInsights] = useState<SkillInsight[]>([]);
 
   useEffect(() => {
-    loadProfileAndRecommendations();
-  }, []);
+    if (guestProfile) {
+      loadGuestRecommendations();
+    } else {
+      loadProfileAndRecommendations();
+    }
+  }, [guestProfile]);
+
+  async function loadGuestRecommendations() {
+    setProfile(guestProfile as any);
+    const [recs, ins] = await Promise.all([
+      getSkillRecommendations(guestProfile as any),
+      getSkillProgressInsights(guestProfile as any),
+    ]);
+    setRecommendations(recs);
+    setInsights(ins);
+    setLoading(false);
+  }
 
   async function loadProfileAndRecommendations() {
     try {
@@ -71,8 +91,16 @@ export function SkillRecommendations() {
     }
   }
 
+
   async function startLearningSkill(skill: string) {
     if (!profile) return;
+    if (guestProfile) {
+      toast({
+        title: "Create an account to track learning",
+        description: "Sign up for free to add skills to your learning journey.",
+      });
+      return;
+    }
 
     try {
       const updatedSkills = [
