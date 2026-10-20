@@ -1,400 +1,151 @@
-import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FileUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Bookmark } from "lucide-react";
 import { GUEST_PROFILE } from "@/lib/AuthProvider";
+import { MatchCard } from "@/components/career/MatchCard";
+import { PROFILE_UPDATED } from "@/components/profile/ResumeUpload";
+import { addApplication, listApplications } from "@/lib/applications";
+import type { JobMatch } from "@/lib/ml-engine";
 
-type JobMatch = {
-  title: string;
-  company: string;
-  score: number;
-  matchingSkills: string[];
-  saved?: boolean;
-  link?: string;
-};
-
-type SavedCourse = {
-  id: string;
-  title: string;
-  provider: string;
-  focusArea: string;
-  link: string;
-  saved: boolean;
-};
-
-const defaultCourses: SavedCourse[] = [
-  {
-    id: "aws-ai",
-    title: "AWS Machine Learning Specialty",
-    provider: "Amazon Web Services",
-    focusArea: "Cloud & AI",
-    link: "https://www.aws.training",
-    saved: false,
-  },
-  {
-    id: "meta-front-end",
-    title: "Meta Front-End Developer Professional Certificate",
-    provider: "Coursera",
-    focusArea: "Front-end Engineering",
-    link: "https://www.coursera.org",
-    saved: false,
-  },
-  {
-    id: "mit-ai",
-    title: "Machine Learning with Python",
-    provider: "MIT xPro",
-    focusArea: "Data Science",
-    link: "https://xpro.mit.edu",
-    saved: false,
-  },
-];
+type StoredMatch = JobMatch & { saved?: boolean };
 
 interface Props {
   guestProfile?: typeof GUEST_PROFILE;
+  onUploadClick?: () => void;
 }
 
-export function SavedOpportunities({ guestProfile }: Props) {
-  const { toast } = useToast();
-  const [loadingMatches, setLoadingMatches] = useState(!guestProfile);
-  const [jobMatches, setJobMatches] = useState<JobMatch[]>(
-    guestProfile ? (guestProfile.job_matches as JobMatch[]) : []
-  );
-  const [courses, setCourses] = useState<SavedCourse[]>(defaultCourses);
-  const [showAllMatches, setShowAllMatches] = useState(!!guestProfile); // guests see all matches by default
+const keyOf = (m: { title: string; company: string }) => `${m.title}|${m.company}`;
 
-  useEffect(() => {
-    if (guestProfile) {
-      // Guest data already loaded in initial state — nothing to do
-      setLoadingMatches(false);
+export function SavedOpportunities({ guestProfile, onUploadClick }: Props) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(!guestProfile);
+  const [matches, setMatches] = useState<StoredMatch[]>(guestProfile ? (guestProfile.job_matches as StoredMatch[]) : []);
+  const [filter, setFilter] = useState<"all" | "saved">("all");
+  const [tracked, setTracked] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) {
+      setLoading(false);
       return;
     }
-    const storedCourses =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("aspiration-saved-courses")
-        : null;
-
-    if (storedCourses) {
-      try {
-        const parsed = JSON.parse(storedCourses) as SavedCourse[];
-        setCourses(parsed);
-      } catch (error) {
-        console.warn("Unable to parse saved courses from storage", error);
-      }
+    const [{ data, error }, apps] = await Promise.all([
+      supabase.from("profiles").select("job_matches").eq("user_id", auth.user.id).maybeSingle(),
+      listApplications().catch(() => []),
+    ]);
+    if (error) {
+      toast({ title: "Couldn't load your job matches", description: error.message, variant: "destructive" });
+    } else {
+      const stored = Array.isArray(data?.job_matches) ? (data!.job_matches as unknown as StoredMatch[]) : [];
+      setMatches(stored.map((m) => ({ ...m, saved: m.saved ?? false })));
     }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        "aspiration-saved-courses",
-        JSON.stringify(courses)
-      );
-    }
-  }, [courses]);
-
-  useEffect(() => {
-    const loadMatches = async () => {
-      setLoadingMatches(true);
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!authData.user) {
-        setLoadingMatches(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("job_matches")
-        .eq("user_id", authData.user.id)
-        .maybeSingle();
-
-      if (error) {
-        toast({
-          title: "Unable to load job matches",
-          description: "Please try again later.",
-          variant: "destructive",
-        });
-        setLoadingMatches(false);
-        return;
-      }
-
-      const matches = (data?.job_matches as JobMatch[] | null) ?? [];
-      setJobMatches(
-        matches.map((match) => ({
-          ...match,
-          saved: match.saved ?? false,
-        }))
-      );
-      setLoadingMatches(false);
-    };
-
-    loadMatches();
+    setTracked(new Set(apps.map((a) => keyOf({ title: a.position, company: a.company }))));
+    setLoading(false);
   }, [toast]);
 
-  const savedJobs = useMemo(
-    () => jobMatches.filter((match) => match.saved),
-    [jobMatches]
-  );
+  useEffect(() => {
+    if (guestProfile) return;
+    load();
+    window.addEventListener(PROFILE_UPDATED, load);
+    return () => window.removeEventListener(PROFILE_UPDATED, load);
+  }, [guestProfile, load]);
 
-  const savedCourses = useMemo(
-    () => courses.filter((course) => course.saved),
-    [courses]
-  );
+  const visible = useMemo(() => (filter === "saved" ? matches.filter((m) => m.saved) : matches), [filter, matches]);
 
-  const matchesToDisplay = showAllMatches ? jobMatches : savedJobs;
+  async function toggleSaved(index: number) {
+    const target = visible[index];
+    const updated = matches.map((m) => (m === target ? { ...m, saved: !m.saved } : m));
+    setMatches(updated);
+    if (guestProfile) return;
 
-  const toggleJobSaved = async (index: number) => {
-    const updatedMatches = jobMatches.map((match, idx) =>
-      idx === index ? { ...match, saved: !match.saved } : match
-    );
-
-    setJobMatches(updatedMatches);
-
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
-      toast({
-        title: "Sign in required",
-        description: "Log in to keep items in your saved list.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
     const { error } = await supabase
       .from("profiles")
-      .update({ job_matches: updatedMatches as unknown as JobMatch[] })
-      .eq("user_id", authData.user.id);
-
+      .update({ job_matches: updated as never })
+      .eq("user_id", auth.user.id);
     if (error) {
-      toast({
-        title: "Couldn't update saved jobs",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-      return;
+      setMatches(matches);
+      toast({ title: "Couldn't update saved jobs", description: error.message, variant: "destructive" });
     }
+  }
 
-    const isSavedNow = updatedMatches[index].saved;
-    toast({
-      title: isSavedNow ? "Job saved" : "Job removed",
-      description: isSavedNow
-        ? "We'll keep this role handy for you."
-        : "This role has been removed from your saved list.",
-    });
-  };
+  async function track(m: StoredMatch) {
+    try {
+      await addApplication({ position: m.title, company: m.company, location: m.location, salary_range: m.salary_range });
+      setTracked((prev) => new Set(prev).add(keyOf(m)));
+      toast({ title: "Added to Applications", description: `${m.title} at ${m.company}` });
+    } catch (err) {
+      toast({ title: "Couldn't track application", description: (err as Error).message, variant: "destructive" });
+    }
+  }
 
-  const toggleCourseSaved = (courseId: string) => {
-    setCourses((prev) =>
-      prev.map((course) =>
-        course.id === courseId
-          ? {
-              ...course,
-              saved: !course.saved,
-            }
-          : course
-      )
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
+  }
 
-    const course = courses.find((item) => item.id === courseId);
-    const isSaved = course?.saved;
+  if (matches.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed p-10 text-center">
+        <FileUp className="mx-auto h-8 w-8 text-muted-foreground" />
+        <p className="mt-3 font-semibold">No job matches yet</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+          Upload your resume and we'll rank roles by how well you fit them, and show what's missing.
+        </p>
+        {onUploadClick && (
+          <Button className="mt-4" onClick={onUploadClick}>
+            Upload resume
+          </Button>
+        )}
+      </div>
+    );
+  }
 
-    toast({
-      title: isSaved ? "Course removed" : "Course saved",
-      description: isSaved
-        ? "The course has been removed from your saved list."
-        : "Course added to your saved learning plan.",
-    });
-  };
+  const savedCount = matches.filter((m) => m.saved).length;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle>Saved Roles</CardTitle>
-          <CardDescription>
-            Keep track of the jobs that match your resume and feel worth
-            revisiting.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              {showAllMatches
-                ? "Showing every role we've analyzed from your resume."
-                : "Showing only the positions you've saved."}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAllMatches((prev) => !prev)}
-            >
-              {showAllMatches ? "View saved" : "View all matches"}
-            </Button>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Job matches</h2>
+          <p className="text-sm text-muted-foreground">Ranked by how well your resume fits each role.</p>
+        </div>
+        <ToggleGroup
+          type="single"
+          value={filter}
+          onValueChange={(v) => v && setFilter(v as "all" | "saved")}
+          className="rounded-lg border p-0.5"
+          aria-label="Filter job matches"
+        >
+          <ToggleGroupItem value="all" size="sm">All {matches.length}</ToggleGroupItem>
+          <ToggleGroupItem value="saved" size="sm">Saved {savedCount}</ToggleGroupItem>
+        </ToggleGroup>
+      </div>
 
-          {loadingMatches ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading matches…
-            </div>
-          ) : matchesToDisplay.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <Bookmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="font-medium text-foreground">No saved roles yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Upload your resume or browse recommendations to save roles that
-                inspire you.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {matchesToDisplay.map((match, index) => (
-                <div
-                  key={`${match.title}-${match.company}-${index}`}
-                  className="rounded-lg border p-4"
-                >
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {match.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {match.company}
-                      </p>
-                    </div>
-                    <Button
-                      variant={match.saved ? "secondary" : "outline"}
-                      onClick={() => toggleJobSaved(jobMatches.indexOf(match))}
-                    >
-                      {match.saved ? "Saved" : "Save role"}
-                    </Button>
-                  </div>
-                  <Separator className="my-4" />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">Match score: {(match.score * 100).toFixed(0)}%</Badge>
-                    {match.matchingSkills.slice(0, 5).map((skill) => (
-                      <Badge key={skill} variant="secondary">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                  {match.link && (
-                    <Button
-                      variant="link"
-                      className="mt-2 px-0"
-                      onClick={() => window.open(match.link, "_blank")}
-                    >
-                      View posting
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle>Saved Courses & Certifications</CardTitle>
-          <CardDescription>
-            Build a learning path that supports your next career move.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {savedCourses.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="font-medium text-foreground">No saved courses yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tap the save button on any course to keep it on your radar.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {savedCourses.map((course) => (
-                <div
-                  key={course.id}
-                  className="rounded-lg border p-4"
-                >
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {course.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {course.provider} • {course.focusArea}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(course.link, "_blank")}
-                      >
-                        Explore
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleCourseSaved(course.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Not seeing the right course? Save one of these recommendations to
-              build your personalized learning list.
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              {courses.map((course) => (
-                <div
-                  key={`suggested-${course.id}`}
-                  className="rounded-lg border p-4"
-                >
-                  <div className="space-y-2">
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">
-                        {course.title}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {course.provider} • {course.focusArea}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Button
-                        variant="link"
-                        className="px-0"
-                        onClick={() => window.open(course.link, "_blank")}
-                      >
-                        View
-                      </Button>
-                      <Button
-                        variant={course.saved ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => toggleCourseSaved(course.id)}
-                      >
-                        {course.saved ? "Saved" : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {visible.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Nothing saved yet. Use Save on any match to keep it here.
+        </div>
+      ) : (
+        visible.map((m, i) => (
+          <MatchCard
+            key={keyOf(m)}
+            match={m}
+            rank={i}
+            saved={m.saved}
+            onToggleSave={() => toggleSaved(i)}
+            tracked={tracked.has(keyOf(m))}
+            onTrack={guestProfile ? undefined : () => track(m)}
+          />
+        ))
+      )}
     </div>
   );
 }

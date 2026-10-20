@@ -49,9 +49,9 @@ export const GUEST_PROFILE = {
   ],
   parsed_resume: null,
   job_matches: [
-    { title: 'Senior Frontend Developer', company: 'TechCorp', score: 0.92, matchingSkills: ['react', 'typescript', 'javascript'], saved: false },
-    { title: 'Full Stack Engineer', company: 'StartupXYZ', score: 0.85, matchingSkills: ['react', 'node.js', 'sql'], saved: false },
-    { title: 'React Developer', company: 'Digital Agency', score: 0.80, matchingSkills: ['react', 'javascript', 'typescript'], saved: false },
+    { title: 'Senior Frontend Developer', company: 'TechCorp', location: 'Remote', salary_range: '$80k–$120k', score: 0.92, matchingSkills: ['react', 'typescript', 'javascript'], missingSkills: ['css'], breakdown: { skills: 0.83, similarity: 1, experience: 1, title: 1 }, saved: false },
+    { title: 'Full Stack Engineer', company: 'StartupXYZ', location: 'Hybrid', salary_range: '$90k–$130k', score: 0.85, matchingSkills: ['react', 'node.js', 'sql'], missingSkills: ['express', 'mongodb'], breakdown: { skills: 0.75, similarity: 0.94, experience: 1, title: 0.5 }, saved: false },
+    { title: 'React Developer', company: 'Digital Agency', location: 'On-site', salary_range: '$75k–$110k', score: 0.8, matchingSkills: ['react', 'javascript', 'typescript'], missingSkills: ['rest api'], breakdown: { skills: 0.75, similarity: 0.8, experience: 1, title: 0.5 }, saved: false },
   ],
 };
 

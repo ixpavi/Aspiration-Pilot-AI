@@ -2,93 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Design system. Flat colour only: no gradients, no blurred glows.
+   ink  #0E1133  text and hard edges
+   paper #F5F6FA page
+   cobalt #2F45FF the one action colour
+   highlighter #FFE45C only for things the resume reader detected
+   All colours are HSL. */
 
 @layer base {
   :root {
-    --background: 240 10% 98%;
-    --foreground: 240 10% 10%;
+    --background: 230 33% 97%;
+    --foreground: 234 57% 13%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 234 57% 13%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover-foreground: 234 57% 13%;
 
-    --primary: 243 75% 59%;
+    --primary: 234 100% 59%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 243 75% 69%;
 
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 6% 10%;
+    --secondary: 230 30% 92%;
+    --secondary-foreground: 234 57% 13%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
+    --muted: 230 28% 92%;
+    --muted-foreground: 234 14% 40%;
 
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 230 30% 92%;
+    --accent-foreground: 234 57% 13%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 2 75% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 160 84% 30%;
     --success-foreground: 0 0% 100%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 243 75% 59%;
+    --border: 232 22% 85%;
+    --input: 232 22% 80%;
+    --ring: 234 100% 59%;
 
-    --radius: 0.75rem;
+    /* Hard edge used for offset shadows and strong outlines */
+    --edge: 234 57% 13%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(243 75% 59%) 0%, hsl(217 91% 60%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(240 10% 99%) 100%);
-    --shadow-soft: 0 2px 8px -2px hsl(240 10% 10% / 0.1);
-    --shadow-medium: 0 4px 16px -4px hsl(240 10% 10% / 0.15);
-    --shadow-glow: 0 0 40px hsl(243 75% 69% / 0.3);
-    
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Highlighter: always dark text on yellow, in both themes */
+    --marker: 51 100% 68%;
+    --marker-ink: 234 57% 13%;
+
+    --radius: 0.5rem;
   }
 
   .dark {
-    --background: 240 10% 8%;
-    --foreground: 240 5% 96%;
+    --background: 235 50% 8%;
+    --foreground: 230 50% 95%;
 
-    --card: 240 10% 12%;
-    --card-foreground: 240 5% 96%;
+    --card: 235 42% 12%;
+    --card-foreground: 230 50% 95%;
 
-    --popover: 240 10% 12%;
-    --popover-foreground: 240 5% 96%;
+    --popover: 235 42% 12%;
+    --popover-foreground: 230 50% 95%;
 
-    --primary: 243 75% 59%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 243 75% 69%;
+    --primary: 234 100% 72%;
+    --primary-foreground: 234 57% 10%;
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 240 5% 96%;
+    --secondary: 235 30% 19%;
+    --secondary-foreground: 230 50% 95%;
 
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 64%;
+    --muted: 235 30% 17%;
+    --muted-foreground: 232 20% 70%;
 
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 235 30% 19%;
+    --accent-foreground: 230 50% 95%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 2 80% 62%;
+    --destructive-foreground: 234 57% 10%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --success: 158 64% 52%;
+    --success-foreground: 234 57% 10%;
 
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 243 75% 59%;
+    --border: 235 25% 23%;
+    --input: 235 25% 28%;
+    --ring: 234 100% 72%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(243 75% 59%) 0%, hsl(217 91% 60%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(240 10% 12%) 0%, hsl(240 10% 14%) 100%);
-    --shadow-soft: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-medium: 0 4px 16px -4px hsl(0 0% 0% / 0.4);
-    --shadow-glow: 0 0 40px hsl(243 75% 69% / 0.4);
+    --edge: 234 100% 72%;
   }
 }
 
@@ -98,12 +94,39 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 
 @layer components {
-  .card-hover {
-    @apply transition-all duration-300 hover:shadow-medium hover:-translate-y-1;
+  /* A detected skill, highlighted like a marker on a printed resume */
+  .marker {
+    background-color: hsl(var(--marker));
+    color: hsl(var(--marker-ink));
+    padding: 0.05em 0.3em;
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  /* The one bold surface treatment: ink outline with a hard offset shadow */
+  .slab {
+    border: 2px solid hsl(var(--edge));
+    box-shadow: 5px 5px 0 0 hsl(var(--edge));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }

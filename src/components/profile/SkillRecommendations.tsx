@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { FitMeter } from "@/components/career/FitMeter";
+import { learningLinks } from "@/components/career/MatchCard";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getSkillRecommendations, getSkillProgressInsights } from "@/lib/skill-recommendations";
-import { ArrowUp, ArrowRight, Minus, Loader2, TrendingUp, Award } from "lucide-react";
+import { ExternalLink, Loader2, TrendingUp } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 import { GUEST_PROFILE } from "@/lib/AuthProvider";
 
@@ -140,8 +139,8 @@ export function SkillRecommendations({ guestProfile }: Props) {
       setRecommendations(prev => prev.filter(r => r.skill !== skill));
 
       toast({
-        title: "Success",
-        description: `Added ${skill} to your learning journey`,
+        title: `Added ${skill} to your skills`,
+        description: "Track your level in the Progress tab.",
       });
     } catch (error) {
       toast({
@@ -160,91 +159,73 @@ export function SkillRecommendations({ guestProfile }: Props) {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Skill Insights</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {insights.map((insight, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-3 p-4 border rounded-lg"
-              >
-                {insight.type === 'fast-progress' ? (
-                  <TrendingUp className="w-5 h-5 text-green-500 mt-1" />
-                ) : (
-                  <Award className="w-5 h-5 text-blue-500 mt-1" />
-                )}
-                <div>
-                  <div className="font-medium">{insight.skill}</div>
-                  <div className="text-sm text-gray-500">{insight.message}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+  const DIFFICULTY = ["", "Beginner", "Easy", "Intermediate", "Advanced", "Expert"];
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recommended Skills</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recommendations.map((rec) => (
-              <div
-                key={rec.skill}
-                className="p-4 border rounded-lg space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{rec.skill}</span>
-                      <Badge variant={
-                        rec.growthTrend === 'rising' ? 'default' :
-                        rec.growthTrend === 'stable' ? 'secondary' :
-                        'outline'
-                      }>
-                        {rec.growthTrend === 'rising' && <ArrowUp className="w-3 h-3 mr-1" />}
-                        {rec.growthTrend === 'stable' && <ArrowRight className="w-3 h-3 mr-1" />}
-                                                {rec.growthTrend === 'declining' && <Minus className="w-3 h-3 mr-1" />}
-                        {rec.growthTrend}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">{rec.reason}</div>
+  return (
+    <div className="space-y-8">
+      <section aria-labelledby="skills-to-learn-heading">
+        <h2 id="skills-to-learn-heading" className="text-xl font-semibold">Skills to learn</h2>
+        <p className="text-sm text-muted-foreground">
+          Ranked by how much each one would improve your best matches.
+        </p>
+
+        {recommendations.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Upload your resume to get recommendations based on your matches.
+          </div>
+        ) : (
+          <ol className="mt-4 divide-y rounded-lg border bg-card">
+            {recommendations.map((rec, i) => (
+              <li key={rec.skill} className="grid gap-3 p-4 sm:grid-cols-[2rem_1fr_auto] sm:items-center">
+                <span className="hidden font-display text-lg font-bold text-muted-foreground sm:block">{i + 1}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="font-semibold">{rec.skill}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {DIFFICULTY[rec.difficulty]}, needed by {rec.requiredBy} {rec.requiredBy === 1 ? "role" : "roles"}
+                    </span>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => startLearningSkill(rec.skill)}
-                  >
-                    Start Learning
+                  <p className="text-sm text-muted-foreground">{rec.reason}</p>
+                  <div className="mt-2 max-w-xs">
+                    <FitMeter value={rec.relevance} size="sm" label={`Relevance of ${rec.skill}`} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  {learningLinks(rec.skill).map((l) => (
+                    <a
+                      key={l.label}
+                      href={l.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      {l.label}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={() => startLearningSkill(rec.skill)}>
+                    I'm learning this
                   </Button>
                 </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Relevance</span>
-                    <span>{Math.round(rec.relevance * 100)}%</span>
-                  </div>
-                  <Progress value={rec.relevance * 100} />
-                </div>
-
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <div>
-                    Required by {rec.requiredBy} jobs
-                  </div>
-                  <div>
-                    Difficulty: {Array(rec.difficulty).fill('★').join('')}
-                  </div>
-                </div>
-              </div>
+              </li>
             ))}
-          </div>
-        </CardContent>
-      </Card>
+          </ol>
+        )}
+      </section>
+
+      {insights.length > 0 && (
+        <section aria-labelledby="skill-insights-heading">
+          <h2 id="skill-insights-heading" className="text-xl font-semibold">Progress notes</h2>
+          <ul className="mt-3 space-y-2">
+            {insights.map((insight, index) => (
+              <li key={index} className="flex gap-3 rounded-lg border bg-card p-4 text-sm">
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+                <span>{insight.message}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

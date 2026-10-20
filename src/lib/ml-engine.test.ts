@@ -9,6 +9,7 @@ import {
   extractEducation,
   normalizeSkill,
   rankJobs,
+  scoreResume,
   totalYears,
   TfIdfModel,
   tokenize,
@@ -210,5 +211,37 @@ describe('rankJobs', () => {
       { title: 'Web Dev', company: 'X', description: null, required_skills: ['React', 'Node.js'], location: null, salary_range: null },
     ]);
     expect(m.matchingSkills).toEqual(['react', 'node.js']);
+  });
+});
+
+describe('scoreResume', () => {
+  it('rewards a complete, quantified resume', () => {
+    const text = `Priya Sharma\npriya@example.com | +91 98765 43210 | linkedin.com/in/priya\n${FULLSTACK_RESUME}
+• Reduced page load time by 40% across 3 products
+• Increased signups by 25% with a new onboarding flow
+• Automated deployments, saving 10 hours per week
+• Launched an analytics dashboard used by 200+ customers
+${'Additional detail about projects and responsibilities. '.repeat(20)}`;
+    const result = scoreResume(text, analyzeResumeText(text, NOW));
+    expect(result.score).toBe(100);
+    expect(result.checks.every((c) => c.passed)).toBe(true);
+  });
+
+  it('flags missing contact details, impact and length on a thin resume', () => {
+    const result = scoreResume(DESIGNER_RESUME, analyzeResumeText(DESIGNER_RESUME, NOW));
+    const failed = result.checks.filter((c) => !c.passed).map((c) => c.id);
+    expect(failed).toEqual(expect.arrayContaining(['contact', 'impact', 'length']));
+    expect(result.score).toBeLessThan(50);
+  });
+});
+
+describe('match breakdown', () => {
+  it('exposes the score components in 0..1', () => {
+    const [m] = rankJobs(analyzeResumeText(DATA_RESUME, NOW), BUILTIN_JOBS);
+    expect(m.breakdown).toBeDefined();
+    for (const v of Object.values(m.breakdown!)) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
   });
 });

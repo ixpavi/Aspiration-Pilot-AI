@@ -13,7 +13,13 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['"Instrument Sans"', 'system-ui', 'sans-serif'],
+        display: ['"Bricolage Grotesque"', '"Instrument Sans"', 'system-ui', 'sans-serif'],
+      },
       colors: {
+        marker: "hsl(var(--marker))",
+        edge: "hsl(var(--edge))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -22,7 +28,6 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
-          glow: "hsl(var(--primary-glow))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -52,18 +57,6 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-      },
-      backgroundImage: {
-        'gradient-hero': 'var(--gradient-hero)',
-        'gradient-card': 'var(--gradient-card)',
-      },
-      boxShadow: {
-        'soft': 'var(--shadow-soft)',
-        'medium': 'var(--shadow-medium)',
-        'glow': 'var(--shadow-glow)',
-      },
-      transitionTimingFunction: {
-        'smooth': 'var(--transition-smooth)',
       },
       borderRadius: {
         lg: "var(--radius)",

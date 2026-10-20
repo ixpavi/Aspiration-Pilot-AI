@@ -16,8 +16,16 @@ export interface ParsedResume {
     year: string;
   }[];
   totalYearsExperience?: number;
+  quality?: ResumeScore;
   rawText?: string;
   resumeUrl?: string;
+}
+
+export interface MatchBreakdown {
+  skills: number;
+  similarity: number;
+  experience: number;
+  title: number;
 }
 
 export interface JobMatch {
@@ -26,6 +34,7 @@ export interface JobMatch {
   score: number;
   matchingSkills: string[];
   missingSkills?: string[];
+  breakdown?: MatchBreakdown;
   location?: string | null;
   salary_range?: string | null;
 }
@@ -444,13 +453,15 @@ export function analyzeResumeText(text: string, now = new Date()): ParsedResume 
   const skills = extractSkills(clean);
   const experience = extractExperience(clean, now);
   const education = extractEducation(clean);
-  return {
+  const parsed: ParsedResume = {
     skills,
     experience,
     education,
     totalYearsExperience: totalYears(clean, experience, now),
     rawText: clean.slice(0, 20000),
   };
+  parsed.quality = scoreResume(clean, parsed);
+  return parsed;
 }
 
 function jobDocument(job: RankableJob): string {
@@ -507,6 +518,12 @@ export function rankJobs(resume: ParsedResume, jobs: RankableJob[]): JobMatch[] 
       score: Math.round(score * 1000) / 1000,
       matchingSkills,
       missingSkills,
+      breakdown: {
+        skills: round2(coverage),
+        similarity: round2(semantic),
+        experience: round2(expFit),
+        title: round2(titleOverlap),
+      },
       location: job.location,
       salary_range: job.salary_range,
     };
@@ -515,10 +532,90 @@ export function rankJobs(resume: ParsedResume, jobs: RankableJob[]): JobMatch[] 
   return matches.sort((a, b) => b.score - a.score);
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 function inferMinYears(job: RankableJob): number {
   const m = (job.description || '').match(/(\d{1,2})\+?\s*(?:years?|yrs?)/i);
   if (m) return parseInt(m[1]);
   if (/senior|sr\.|lead|principal|architect|manager/i.test(job.title)) return 5;
   if (/junior|jr\.|intern|graduate|entry/i.test(job.title)) return 0;
   return 2;
+}
+
+// ---------------------------------------------------------------------------
+// Resume quality score: checks recruiters and applicant-tracking systems
+// commonly care about. Each check carries a weight; the score is out of 100.
+// ---------------------------------------------------------------------------
+export interface ResumeCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  tip: string;
+  weight: number;
+}
+
+export interface ResumeScore {
+  score: number;
+  checks: ResumeCheck[];
+}
+
+const ACTION_VERBS = /\b(built|led|developed|designed|implemented|created|launched|improved|reduced|increased|managed|delivered|automated|optimi[sz]ed|analy[sz]ed|architected|migrated|mentored|shipped|owned|drove|founded|streamlined|deployed|trained|researched)\b/gi;
+
+export function scoreResume(text: string, parsed: ParsedResume): ResumeScore {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const quantified = lines.filter((l) => /\d+\s?(%|x\b|k\b|\+|users|customers|clients|people|hours|days|ms|million|lakh|crore)|[$₹€£]\s?\d/i.test(l));
+  const actionVerbCount = (text.match(ACTION_VERBS) || []).length;
+  const hasSection = (re: RegExp) => lines.some((l) => re.test(l) && l.length < 40);
+
+  const checks: ResumeCheck[] = [
+    {
+      id: 'contact', weight: 10,
+      label: 'Contact details',
+      passed: /[\w.+-]+@[\w-]+\.[\w.]+/.test(text) && /(\+?\d[\d\s-]{8,}\d|linkedin\.com|github\.com)/i.test(text),
+      tip: 'Add an email address plus a phone number or LinkedIn/GitHub link at the top.',
+    },
+    {
+      id: 'sections', weight: 15,
+      label: 'Standard sections',
+      passed: hasSection(/^(work |professional )?experience|employment/i) && hasSection(/^education/i) && hasSection(/^(technical )?skills/i),
+      tip: 'Use clear "Experience", "Education" and "Skills" headings so screening software can find them.',
+    },
+    {
+      id: 'skills', weight: 20,
+      label: 'Enough relevant skills',
+      passed: parsed.skills.length >= 8,
+      tip: `Only ${parsed.skills.length} recognisable skills found. List the tools and technologies you actually use (aim for 8+).`,
+    },
+    {
+      id: 'experience', weight: 15,
+      label: 'Dated work history',
+      passed: parsed.experience.length > 0,
+      tip: 'Give each role a title and a date range like "Jan 2022 – Present" so your experience can be counted.',
+    },
+    {
+      id: 'impact', weight: 20,
+      label: 'Measurable impact',
+      passed: quantified.length >= 3,
+      tip: `${quantified.length} line${quantified.length === 1 ? '' : 's'} with numbers. Show results: "cut load time by 40%", "served 20k users".`,
+    },
+    {
+      id: 'verbs', weight: 10,
+      label: 'Action verbs',
+      passed: actionVerbCount >= 5,
+      tip: 'Start bullet points with verbs like built, led, reduced, launched.',
+    },
+    {
+      id: 'length', weight: 10,
+      label: 'Sensible length',
+      passed: words >= 200 && words <= 1000,
+      tip: words < 200
+        ? `About ${words} words. Add detail on what you did and achieved (200–1000 words reads well).`
+        : `About ${words} words. Trim to the most relevant points (under 1000 words).`,
+    },
+  ];
+
+  const total = checks.reduce((acc, c) => acc + c.weight, 0);
+  const earned = checks.filter((c) => c.passed).reduce((acc, c) => acc + c.weight, 0);
+  return { score: Math.round((earned / total) * 100), checks };
 }

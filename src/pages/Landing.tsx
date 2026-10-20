@@ -1,203 +1,155 @@
+import { Link, useNavigate } from "react-router-dom";
+import { BookOpenCheck, ClipboardList, FileSearch, Gauge, ListOrdered, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Link } from "react-router-dom";
-import {
-  Sparkles,
-  TrendingUp,
-  Target,
-  Users,
-  Brain,
-  Zap,
-  CheckCircle,
-  ArrowRight,
-} from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/brand/ThemeToggle";
+import { LiveDemo } from "@/components/landing/LiveDemo";
+import { useAuth } from "@/lib/AuthProvider";
+
+const STEPS = [
+  {
+    title: "Reads your resume",
+    body: "Pulls out 120+ skills (it knows ReactJS is React and k8s is Kubernetes), your roles, dates and degrees from a PDF, Word file or plain text.",
+  },
+  {
+    title: "Ranks every role",
+    body: "Scores each job on the skills it needs that you have, how closely your resume reads like the job, your years of experience and past titles.",
+  },
+  {
+    title: "Tells you what's next",
+    body: "Shows the exact skills standing between you and each role, with courses to close the gap, and how to make your resume stronger.",
+  },
+];
+
+const FEATURES = [
+  { icon: ListOrdered, title: "Ranked job matches", body: "See why each role fits, part by part, and save the ones worth chasing." },
+  { icon: Gauge, title: "Resume score", body: "Seven checks recruiters' screening software cares about, with a fix for each one you miss." },
+  { icon: BookOpenCheck, title: "Skills to learn", body: "The gaps that matter for your best matches, ranked, with links to courses and videos." },
+  { icon: ClipboardList, title: "Application tracker", body: "Track roles from applied to offer without a spreadsheet." },
+  { icon: FileSearch, title: "PDF and Word support", body: "Upload the resume you already have. No reformatting." },
+  { icon: ShieldCheck, title: "Private by default", body: "Your resume is read in your browser. Only the results are saved to your account." },
+];
 
 const Landing = () => {
-  const features = [
-    {
-      icon: <Brain className="w-6 h-6" />,
-      title: "AI-Powered Career Guidance",
-      description: "Get personalized career recommendations based on your skills, interests, and market trends.",
-    },
-    {
-      icon: <Target className="w-6 h-6" />,
-      title: "Skills Gap Analysis",
-      description: "Identify skill gaps and receive targeted learning paths to achieve your career goals.",
-    },
-    {
-      icon: <TrendingUp className="w-6 h-6" />,
-      title: "Market Insights",
-      description: "Stay ahead with real-time job market trends and salary benchmarks.",
-    },
-    {
-      icon: <Zap className="w-6 h-6" />,
-      title: "Smart Job Matching",
-      description: "Find opportunities that truly match your profile and career aspirations.",
-    },
-  ];
+  const navigate = useNavigate();
+  const { user, continueAsGuest } = useAuth();
 
-  const stats = [
-    { value: "70%", label: "Students Struggle with Career Direction" },
-    { value: "85%", label: "Employers Can't Find Right Talent" },
-    { value: "10x", label: "Cost of Traditional Career Counseling" },
-  ];
-
-  const benefits = [
-    "Personalized career roadmaps tailored to your goals",
-    "AI-driven job recommendations matching your profile",
-    "Skills development tracking and certification",
-    "Direct connection to opportunities",
-    "Industry expert insights and mentorship",
-    "Affordable and accessible for everyone",
-  ];
+  function exploreDemo() {
+    continueAsGuest();
+    navigate("/dashboard");
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-hero opacity-10" />
-        <div className="container mx-auto px-4 py-20 relative">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">
-                Solving the Career Confusion Crisis
-              </span>
-            </div>
-            
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight">
-              Navigate Your Career with{" "}
-              <span className="bg-gradient-hero bg-clip-text text-transparent">
-                AI-Powered Clarity
-              </span>
+      <header className="container mx-auto flex items-center justify-between px-4 py-4">
+        <Logo />
+        <nav className="flex items-center gap-1 sm:gap-2" aria-label="Main">
+          <ThemeToggle />
+          {user ? (
+            <Button asChild size="sm">
+              <Link to="/dashboard">Open dashboard</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/auth">Sign in</Link>
+              </Button>
+              <Button asChild size="sm" className="hidden sm:inline-flex">
+                <Link to="/auth">Create account</Link>
+              </Button>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <main>
+        <section className="container mx-auto grid items-center gap-10 px-4 pb-20 pt-8 lg:grid-cols-[5fr_7fr] lg:gap-14 lg:pt-14">
+          <div className="max-w-xl">
+            <h1 className="text-[2.6rem] font-extrabold leading-[1.05] sm:text-6xl">
+              See which jobs your resume already fits.
             </h1>
-            
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Join thousands discovering their perfect career path. Get personalized guidance,
-              skill development plans, and direct access to opportunities that match your potential.
+            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+              CareerPath AI reads your resume the way screening software does, ranks real roles by how well you fit,
+              and shows exactly which skills to learn next. Try it here: edit the sample or paste your own.
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button size="lg" variant="hero" asChild>
-                <Link to="/auth">
-                  Get Started Free
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Link>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link to={user ? "/dashboard" : "/auth"}>{user ? "Open dashboard" : "Analyse my resume"}</Link>
               </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link to="/auth">Learn More</Link>
-              </Button>
+              {!user && (
+                <Button size="lg" variant="outline" onClick={exploreDemo}>
+                  Explore with demo data
+                </Button>
+              )}
             </div>
+            <p className="mt-4 text-sm text-muted-foreground">Free. No resume leaves your browser.</p>
           </div>
-        </div>
-      </section>
 
-      {/* Stats Section */}
-      <section className="py-16 border-y border-border">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center space-y-2">
-                <div className="text-4xl md:text-5xl font-bold bg-gradient-hero bg-clip-text text-transparent">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-muted-foreground">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+          <LiveDemo />
+        </section>
 
-      {/* Features Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground">
-              Career Guidance Reimagined
+        <section className="border-y bg-muted/40 py-20" aria-labelledby="how-heading">
+          <div className="container mx-auto px-4">
+            <h2 id="how-heading" className="max-w-2xl text-3xl font-bold sm:text-4xl">
+              How the matching works
             </h2>
-            <p className="text-lg text-muted-foreground">
-              Traditional career counseling is expensive and outdated. We're revolutionizing
-              how people discover and navigate their professional journeys.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-            {features.map((feature, index) => (
-              <Card key={index} className="card-hover">
-                <CardContent className="p-6 space-y-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                    {feature.icon}
+            <ol className="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
+              {STEPS.map((step, i) => (
+                <li key={step.title} className="relative">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary font-display font-bold text-primary-foreground">
+                      {i + 1}
+                    </span>
+                    {i < STEPS.length - 1 && <span className="hidden h-px flex-1 bg-border md:block" aria-hidden="true" />}
                   </div>
-                  <h3 className="text-xl font-semibold text-card-foreground">
-                    {feature.title}
-                  </h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+                  <h3 className="mt-4 text-xl font-semibold">{step.title}</h3>
+                  <p className="mt-2 max-w-sm leading-relaxed text-muted-foreground">{step.body}</p>
+                </li>
+              ))}
+            </ol>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Benefits Section */}
-      <section className="py-20 bg-secondary/50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12 space-y-4">
-              <h2 className="text-4xl md:text-5xl font-bold text-foreground">
-                Why Choose CareerPath AI?
+        <section className="container mx-auto px-4 py-20" aria-labelledby="features-heading">
+          <div className="grid gap-12 lg:grid-cols-[1fr_2fr]">
+            <div>
+              <h2 id="features-heading" className="text-3xl font-bold sm:text-4xl">
+                Everything in your dashboard
               </h2>
-              <p className="text-lg text-muted-foreground">
-                Everything you need to take control of your career journey
+              <p className="mt-4 max-w-sm text-muted-foreground">
+                One place to understand where you stand and decide what to do about it.
               </p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {benefits.map((benefit, index) => (
-                <div key={index} className="flex items-start gap-3 p-4">
-                  <CheckCircle className="w-6 h-6 text-success flex-shrink-0 mt-0.5" />
-                  <span className="text-foreground">{benefit}</span>
+            <dl className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+              {FEATURES.map(({ icon: Icon, title, body }) => (
+                <div key={title} className="flex gap-4">
+                  <Icon className="mt-0.5 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+                  <div>
+                    <dt className="font-semibold">{title}</dt>
+                    <dd className="mt-1 text-sm leading-relaxed text-muted-foreground">{body}</dd>
+                  </div>
                 </div>
               ))}
+            </dl>
+          </div>
+        </section>
+
+        <section className="bg-foreground py-16 text-background">
+          <div className="container mx-auto flex flex-col items-start justify-between gap-6 px-4 md:flex-row md:items-center">
+            <div>
+              <h2 className="text-3xl font-bold sm:text-4xl">Find out where you stand.</h2>
+              <p className="mt-2 opacity-75">Upload your resume and get your matches in under a minute.</p>
             </div>
+            <Button asChild size="lg" className="bg-marker text-[hsl(var(--marker-ink))] hover:bg-marker/90">
+              <Link to={user ? "/dashboard" : "/auth"}>{user ? "Open dashboard" : "Create free account"}</Link>
+            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* CTA Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <Card className="max-w-4xl mx-auto overflow-hidden border-2 border-primary/20">
-            <CardContent className="p-12 text-center space-y-6 relative">
-              <div className="absolute inset-0 bg-gradient-hero opacity-5" />
-              <div className="relative space-y-6">
-                <Users className="w-16 h-16 mx-auto text-primary" />
-                <h2 className="text-3xl md:text-4xl font-bold text-foreground">
-                  Ready to Find Your Path?
-                </h2>
-                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                  Join thousands of professionals who've discovered their ideal career with our AI-powered platform.
-                  Get started today, completely free.
-                </p>
-                <Button size="lg" variant="hero" asChild>
-                  <Link to="/auth">
-                    Start Your Journey
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="py-8 border-t border-border">
-        <div className="container mx-auto px-4">
-          <div className="text-center text-sm text-muted-foreground">
-            <p>© 2025 CareerPath AI. Solving the career confusion crisis.</p>
-          </div>
-        </div>
+      <footer className="container mx-auto flex flex-col items-start justify-between gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center">
+        <Logo />
+        <p>© {new Date().getFullYear()} CareerPath AI</p>
       </footer>
     </div>
   );

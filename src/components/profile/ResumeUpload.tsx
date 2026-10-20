@@ -7,6 +7,12 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, FileText, Loader2, CheckCircle, X, Briefcase } from "lucide-react";
 import { parseResumeFile, findJobMatches, type ParsedResume, type JobMatch } from "@/lib/ml-services";
+import { MatchCard } from "@/components/career/MatchCard";
+import { ResumeScoreCard } from "@/components/career/ResumeScoreCard";
+import { addApplication } from "@/lib/applications";
+
+// Fired after a new analysis is saved so the dashboard can refresh its stats.
+export const PROFILE_UPDATED = "careerpath:profile-updated";
 
 type UploadStep = "idle" | "parsing" | "uploading" | "matching" | "done" | "error";
 
@@ -32,6 +38,17 @@ export function ResumeUpload() {
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jobMatchCount, setJobMatchCount] = useState<number | null>(null);
   const [topMatches, setTopMatches] = useState<JobMatch[]>([]);
+  const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
+
+  async function trackMatch(m: JobMatch) {
+    try {
+      await addApplication({ position: m.title, company: m.company, location: m.location, salary_range: m.salary_range });
+      setTrackedKeys((prev) => new Set(prev).add(`${m.title}|${m.company}`));
+      toast({ title: "Added to Applications", description: `${m.title} at ${m.company}` });
+    } catch (err) {
+      toast({ title: "Couldn't track application", description: (err as Error).message, variant: "destructive" });
+    }
+  }
   const [isDragging, setIsDragging] = useState(false);
 
   const isWorking = step === "parsing" || step === "uploading" || step === "matching";
@@ -133,6 +150,7 @@ export function ResumeUpload() {
         });
       }
 
+      if (!saveError) window.dispatchEvent(new Event(PROFILE_UPDATED));
       setStep("done");
       toast({
         title: "Resume analyzed!",
@@ -175,7 +193,7 @@ export function ResumeUpload() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Upload Your Resume</CardTitle>
+          <CardTitle>Upload your resume</CardTitle>
           <CardDescription>
             Upload a PDF or Word document — we'll extract your skills, experience, and match you to relevant jobs.
           </CardDescription>
@@ -255,20 +273,20 @@ export function ResumeUpload() {
       {/* Parsed Results */}
       {parsedResume && step === "done" && (
         <>
+          {parsedResume.quality && <ResumeScoreCard quality={parsedResume.quality} />}
+
           {/* Skills Card */}
           {parsedResume.skills.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Skills Detected</CardTitle>
+                <CardTitle className="text-base">{parsedResume.skills.length} skills found</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
+                <p className="flex flex-wrap gap-1.5 text-sm">
                   {parsedResume.skills.map((skill) => (
-                    <Badge key={skill} variant="secondary" className="capitalize">
-                      {skill}
-                    </Badge>
+                    <span key={skill} className="marker font-medium">{skill}</span>
                   ))}
-                </div>
+                </p>
               </CardContent>
             </Card>
           )}
@@ -287,7 +305,7 @@ export function ResumeUpload() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Experience Detected
+                  Experience found
                   {parsedResume.totalYearsExperience ? (
                     <span className="ml-2 text-sm font-normal text-muted-foreground">
                       ~{parsedResume.totalYearsExperience} years total
@@ -313,35 +331,24 @@ export function ResumeUpload() {
 
           {/* Top Job Matches */}
           {topMatches.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top Job Matches</CardTitle>
-                <CardDescription>Ranked by skill coverage, resume similarity and experience fit</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {topMatches.map((m, i) => (
-                  <div key={i} className="p-3 border rounded-lg space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="font-medium text-sm">{m.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {m.company}
-                          {m.location ? ` · ${m.location}` : ""}
-                          {m.salary_range ? ` · ${m.salary_range}` : ""}
-                        </div>
-                      </div>
-                      <Badge>{Math.round(m.score * 100)}%</Badge>
-                    </div>
-                    <Progress value={m.score * 100} className="h-1.5" />
-                    {m.missingSkills && m.missingSkills.length > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        Skills to learn: {m.missingSkills.join(", ")}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            <section className="space-y-3" aria-labelledby="top-matches-heading">
+              <div>
+                <h3 id="top-matches-heading" className="text-lg font-semibold">Your best matches</h3>
+                <p className="text-sm text-muted-foreground">
+                  Dashed skills are the ones the role asks for that your resume doesn't show yet.
+                </p>
+              </div>
+              {topMatches.map((m, i) => (
+                <MatchCard
+                  key={`${m.title}-${m.company}`}
+                  match={m}
+                  rank={i}
+                  defaultOpen={i === 0}
+                  tracked={trackedKeys.has(`${m.title}|${m.company}`)}
+                  onTrack={() => trackMatch(m)}
+                />
+              ))}
+            </section>
           )}
 
           {/* Job Matches Summary */}
