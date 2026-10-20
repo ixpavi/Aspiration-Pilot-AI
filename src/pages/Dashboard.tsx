@@ -24,6 +24,8 @@ import { useAuth } from "@/lib/AuthProvider";
 
 interface DashboardStats {
   careerScore: number;
+  careerScoreSub: string;
+  resumeSkillsCount: number;
   skillsCompleted: number;
   skillsTotal: number;
   applicationsCount: number;
@@ -40,12 +42,32 @@ const DEFAULT_CAREER_PATH = [
   { label: "Software Architect", done: false },
 ];
 
+type ScoredMatch = { title?: string; score?: number };
+
+// Best resume match when there is one, otherwise the average self-assessed level.
+function computeCareerScore(assessments: { level: number }[], matches: ScoredMatch[]) {
+  const best = matches.reduce<ScoredMatch | null>(
+    (top, m) => ((m.score ?? 0) > (top?.score ?? -1) ? m : top),
+    null
+  );
+  if (best) {
+    return { careerScore: Math.round((best.score ?? 0) * 100), careerScoreSub: `Best fit: ${best.title}` };
+  }
+  if (assessments.length > 0) {
+    const avg = assessments.reduce((acc, s) => acc + s.level / 5, 0) / assessments.length;
+    return { careerScore: Math.round(avg * 100), careerScoreSub: "Based on your assessed skills" };
+  }
+  return { careerScore: 0, careerScoreSub: "Upload a resume to get scored" };
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, loading, isGuest, guestProfile, signOut } = useAuth();
 
   const [stats, setStats] = useState<DashboardStats>({
     careerScore: 0,
+    careerScoreSub: "Based on your skills",
+    resumeSkillsCount: 0,
     skillsCompleted: 0,
     skillsTotal: 0,
     applicationsCount: 0,
@@ -79,12 +101,10 @@ const Dashboard = () => {
     const skills = guestProfile.skill_assessments || [];
     const skillsCompleted = skills.filter((s) => s.level >= 3).length;
     const skillsTotal = skills.length;
-    const careerScore = skillsTotal > 0
-      ? Math.round((skills.reduce((acc, s) => acc + s.level / 5, 0) / skillsTotal) * 100)
-      : 0;
 
     setStats({
-      careerScore,
+      ...computeCareerScore(skills, guestProfile.job_matches || []),
+      resumeSkillsCount: 0,
       skillsCompleted,
       skillsTotal,
       applicationsCount: 2,
@@ -115,14 +135,9 @@ const Dashboard = () => {
       if (profile) {
         const skills = profile.skill_assessments || [];
         const skillsCompleted = skills.filter((s: any) => s.level >= 3).length;
-        const skillsTotal = Math.max(skills.length, 1);
-        const careerScore = skillsTotal > 0
-          ? Math.round(
-              (skills.reduce((acc: number, s: any) => acc + s.level / 5, 0) / skillsTotal) * 100
-            )
-          : 0;
-
-        const jobMatches = (profile.job_matches as any[]) || [];
+        const skillsTotal = skills.length;
+        const jobMatches = Array.isArray(profile.job_matches) ? (profile.job_matches as ScoredMatch[]) : [];
+        const resumeSkills = (profile.parsed_resume as { skills?: string[] } | null)?.skills || [];
 
         const { count: appCount } = await supabase
           .from("job_applications")
@@ -137,7 +152,8 @@ const Dashboard = () => {
         }
 
         setStats({
-          careerScore,
+          ...computeCareerScore(skills, jobMatches),
+          resumeSkillsCount: resumeSkills.length,
           skillsCompleted,
           skillsTotal,
           applicationsCount: appCount || 0,
@@ -176,13 +192,15 @@ const Dashboard = () => {
     {
       title: "Career Match Score",
       value: loadingStats ? "—" : `${stats.careerScore}%`,
-      sub: "Based on your skills",
+      sub: stats.careerScoreSub,
       icon: <TrendingUp className="w-5 h-5 text-primary" />,
     },
     {
       title: "Skills Assessed",
       value: loadingStats ? "—" : `${stats.skillsCompleted}/${stats.skillsTotal}`,
-      sub: `${stats.skillsTotal} total skills`,
+      sub: stats.resumeSkillsCount > 0
+        ? `${stats.resumeSkillsCount} skills found in your resume`
+        : `${stats.skillsTotal} skills added`,
       icon: <Target className="w-5 h-5 text-primary" />,
     },
     {

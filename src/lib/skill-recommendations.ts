@@ -122,6 +122,22 @@ export async function getSkillRecommendations(
     }
   });
 
+  // Skills missing from the user's best resume matches are the most direct
+  // gaps to close. Keep the highest-scoring match each skill comes from.
+  const gapFromMatch = new Map<string, { title: string; score: number }>();
+  const storedMatches = (Array.isArray(profile.job_matches) ? profile.job_matches : []) as {
+    title?: string; score?: number; missingSkills?: string[];
+  }[];
+  storedMatches.slice(0, 3).forEach(match => {
+    (match.missingSkills || []).forEach(raw => {
+      const skill = normalizeSkill(raw);
+      const score = match.score ?? 0;
+      if (!gapFromMatch.has(skill) || gapFromMatch.get(skill)!.score < score) {
+        gapFromMatch.set(skill, { title: match.title || 'your top match', score });
+      }
+    });
+  });
+
   // Calculate recommendations from DB skills
   const recommendations: SkillRecommendation[] = [];
 
@@ -132,6 +148,8 @@ export async function getSkillRecommendations(
 
     let relevance = 0;
 
+    const gap = gapFromMatch.get(skill);
+    if (gap) relevance += 0.5 * gap.score;
     if (relevantSkills.has(skill)) relevance += 0.4;
     relevance += Math.min(frequency / (jobs.length || 1), 0.3);
 
@@ -144,7 +162,9 @@ export async function getSkillRecommendations(
     relevance += complementaryScore * 0.3;
 
     let reason = '';
-    if (relevantSkills.has(skill)) {
+    if (gap) {
+      reason = `Missing for your top match: ${gap.title}`;
+    } else if (relevantSkills.has(skill)) {
       reason = targetRoles.length > 0
         ? `Required for ${targetRoles.slice(0, 2).join(' or ')} roles`
         : 'Relevant to your target career path';
@@ -159,7 +179,7 @@ export async function getSkillRecommendations(
 
     recommendations.push({
       skill,
-      relevance,
+      relevance: Math.min(relevance, 1),
       reason,
       requiredBy: frequency,
       growthTrend,
