@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, FileText, Loader2, CheckCircle, X, Briefcase } from "lucide-react";
-import { parseResumeFile, findJobMatches, type ParsedResume } from "@/lib/ml-services";
+import { parseResumeFile, findJobMatches, type ParsedResume, type JobMatch } from "@/lib/ml-services";
 
 type UploadStep = "idle" | "parsing" | "uploading" | "matching" | "done" | "error";
 
@@ -31,6 +31,7 @@ export function ResumeUpload() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [jobMatchCount, setJobMatchCount] = useState<number | null>(null);
+  const [topMatches, setTopMatches] = useState<JobMatch[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const isWorking = step === "parsing" || step === "uploading" || step === "matching";
@@ -64,6 +65,7 @@ export function ResumeUpload() {
     setFileName(file.name);
     setParsedResume(null);
     setJobMatchCount(null);
+    setTopMatches([]);
 
     try {
       // Step 1: Parse resume locally from File object (no CORS issues)
@@ -85,44 +87,56 @@ export function ResumeUpload() {
         return;
       }
 
-      const filename = `${user.id}_${Date.now()}_${file.name}`;
+      // Storage policy only allows uploads into a folder named after the user id
+      const storagePath = `${user.id}/${Date.now()}_${file.name.replace(/[^\w.-]/g, "_")}`;
       const { error: uploadError } = await supabase.storage
         .from("resumes")
-        .upload(filename, file, { upsert: true });
-
-      let publicUrl = "";
-      if (!uploadError) {
-        const { data: { publicUrl: url } } = supabase.storage
-          .from("resumes")
-          .getPublicUrl(filename);
-        publicUrl = url;
-      }
+        .upload(storagePath, file, { upsert: true });
       // Don't fail the whole flow if storage upload fails — parsed data is more important
+      if (uploadError) console.warn("Resume upload to storage failed:", uploadError.message);
 
       // Step 3: Find job matches
       setStep("matching");
       const matches = await findJobMatches(parsed);
-      setJobMatchCount(matches.length);
-
       const enrichedMatches = matches.slice(0, 10).map((m) => ({ ...m, saved: false }));
+      setJobMatchCount(enrichedMatches.length);
+      setTopMatches(enrichedMatches.slice(0, 5));
 
-      // Step 4: Save parsed resume & matches to profile
-      await supabase
+      // Step 4: Save parsed resume & matches to profile (upsert in case the
+      // profile row was never created at signup)
+      const { rawText: _rawText, ...parsedToSave } = parsed;
+      const { error: saveError } = await supabase
         .from("profiles")
-        .update({
-          parsed_resume: {
-            ...parsed,
-            resumeUrl: publicUrl || undefined,
-          } as any,
-          job_matches: enrichedMatches as any,
-          skills: parsed.skills,
-        })
-        .eq("user_id", user.id);
+        .upsert(
+          {
+            user_id: user.id,
+            email: user.email ?? "",
+            full_name: (user.user_metadata?.full_name as string) || user.email?.split("@")[0] || "User",
+            parsed_resume: {
+              ...parsedToSave,
+              resumeUrl: uploadError ? undefined : storagePath,
+            } as any,
+            job_matches: enrichedMatches as any,
+            skills: parsed.skills,
+            ...(parsed.totalYearsExperience
+              ? { experience_years: Math.round(parsed.totalYearsExperience) }
+              : {}),
+          },
+          { onConflict: "user_id" }
+        );
+      if (saveError) {
+        console.error("Saving analysis failed:", saveError);
+        toast({
+          title: "Analysis done, but not saved",
+          description: saveError.message,
+          variant: "destructive",
+        });
+      }
 
       setStep("done");
       toast({
         title: "Resume analyzed!",
-        description: `Found ${matches.length} job matches based on your skills.`,
+        description: `Top match: ${enrichedMatches[0]?.title ?? "none"} (${Math.round((enrichedMatches[0]?.score ?? 0) * 100)}%)`,
       });
     } catch (err: any) {
       console.error("Resume processing error:", err);
@@ -154,6 +168,7 @@ export function ResumeUpload() {
     setFileName(null);
     setParsedResume(null);
     setJobMatchCount(null);
+    setTopMatches([]);
   }
 
   return (
@@ -271,14 +286,57 @@ export function ResumeUpload() {
           {parsedResume.experience.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Experience Detected</CardTitle>
+                <CardTitle className="text-base">
+                  Experience Detected
+                  {parsedResume.totalYearsExperience ? (
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      ~{parsedResume.totalYearsExperience} years total
+                    </span>
+                  ) : null}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {parsedResume.experience.map((exp, i) => (
                   <div key={i} className="p-3 border rounded-lg space-y-1">
-                    <div className="font-medium text-sm">{exp.title}</div>
+                    <div className="font-medium text-sm">
+                      {exp.title}
+                      {exp.company && <span className="text-muted-foreground font-normal"> · {exp.company}</span>}
+                    </div>
                     {exp.duration && (
                       <div className="text-xs text-muted-foreground">{exp.duration}</div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top Job Matches */}
+          {topMatches.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top Job Matches</CardTitle>
+                <CardDescription>Ranked by skill coverage, resume similarity and experience fit</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {topMatches.map((m, i) => (
+                  <div key={i} className="p-3 border rounded-lg space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-sm">{m.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {m.company}
+                          {m.location ? ` · ${m.location}` : ""}
+                          {m.salary_range ? ` · ${m.salary_range}` : ""}
+                        </div>
+                      </div>
+                      <Badge>{Math.round(m.score * 100)}%</Badge>
+                    </div>
+                    <Progress value={m.score * 100} className="h-1.5" />
+                    {m.missingSkills && m.missingSkills.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        Skills to learn: {m.missingSkills.join(", ")}
+                      </div>
                     )}
                   </div>
                 ))}

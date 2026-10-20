@@ -6,7 +6,7 @@ Career Navigator is a web application designed to help users find suitable job r
 
 This project is currently in the initial development phase. The frontend is built with React, Vite, and `shadcn/ui`, and it includes a landing page, authentication, and a user dashboard. The backend is powered by Supabase, with a database schema designed to support user profiles, job applications, certifications, and more.
 
-While the core AI/ML features for resume analysis and job matching are not yet implemented, the application provides a solid foundation for future development.
+Resume analysis, job matching and skill recommendations run client-side (see below).
 
 ## 🛠️ Tech Stack
 
@@ -22,45 +22,29 @@ While the core AI/ML features for resume analysis and job matching are not yet i
 
 ## ⚙️ Getting Started
 
-To get a local copy up and running, follow these steps.
+```sh
+npm install
+npm run dev
+```
 
-### Prerequisites
+Open http://localhost:8080. Use **Continue as Guest** for demo data, or sign up to upload a resume.
+`.env` points at the Supabase project the app was built against; replace the values to use your own
+(run `setup-database.sql` in its SQL editor first).
 
-- [Node.js](https://nodejs.org/en/) (v18 or later)
-- [bun](https://bun.sh/) (or npm/yarn)
-- [Supabase Account](https://supabase.com/)
+## 🤖 How the resume ML works
 
-### Installation
+Everything runs in the browser (`src/lib/ml-engine.ts`, `src/lib/ml-services.ts`):
 
-1. **Clone the repository:**
-   ```sh
-   git clone https://github.com/your-username/career-navigator.git
-   cd career-navigator
-   ```
+1. **Text extraction**: PDF via pdf.js (worker bundled locally), DOCX via mammoth, or plain text.
+2. **Skill extraction**: a taxonomy of ~120 skills with aliases (e.g. `reactjs` → react, `k8s` → kubernetes),
+   matched on word boundaries so "Java" isn't found inside "JavaScript" and "go" isn't found in "good".
+3. **Experience & education**: date ranges (`Jan 2022 – Present`, `2019-2021`, `07/2020 - 12/2021`) become
+   roles with durations; overlapping roles are merged for total years.
+4. **Job ranking**: a TF-IDF model scores resume-to-job text similarity, combined with required-skill coverage,
+   experience fit and title overlap. Jobs come from the `jobs` table, or a built-in catalog of 24 roles
+   (`src/lib/job-catalog.ts`) when the table is empty.
 
-2. **Install dependencies:**
-   ```sh
-   bun install
-   ```
-
-3. **Set up Supabase:**
-   - Create a new project on [Supabase](https://supabase.com/).
-   - Go to the **SQL Editor** and run the SQL script from `supabase/migrations/20251004065518_e5199070-cdd9-4fcd-99f5-235933a9e3c0.sql` to create the database tables.
-   - In your Supabase project settings, go to **API** and find your Project URL and `anon` public key.
-
-4. **Configure environment variables:**
-   - Create a `.env` file in the root of the project.
-   - Add your Supabase URL and public key to the `.env` file:
-     ```
-     VITE_SUPABASE_URL=YOUR_SUPABASE_URL
-     VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_ANON_KEY
-     ```
-
-5. **Run the development server:**
-   ```sh
-   bun run dev
-   ```
-   The application will be available at `http://localhost:5173`.
+Sample resumes for testing are in `sample-resumes/`.
 
 ## 🗃️ Database Schema
 

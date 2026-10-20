@@ -35,7 +35,7 @@ export function CareerDashboardTabs() {
 
   return (
     <Tabs defaultValue="progress" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 gap-2 md:grid-cols-6">
+      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
         <TabsTrigger value="progress">Career Progress</TabsTrigger>
         <TabsTrigger value="preferences">Goals &amp; Preferences</TabsTrigger>
         <TabsTrigger value="recommendations">Skill Recommendations</TabsTrigger>

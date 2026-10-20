@@ -59,12 +59,12 @@ export function CareerPreferences({ guestProfile }: Props) {
         .from("profiles")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
       setProfile(data);
-      if (data.job_preferences) {
+      if (data?.job_preferences) {
         setRemoteOnly(data.job_preferences.remoteOnly);
         setMinimumSalary(data.job_preferences.minimumSalary?.toString() || "");
       }

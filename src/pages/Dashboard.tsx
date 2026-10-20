@@ -110,7 +110,7 @@ const Dashboard = () => {
         .from("profiles")
         .select("*")
         .eq("user_id", user!.id)
-        .single();
+        .maybeSingle();
 
       if (profile) {
         const skills = profile.skill_assessments || [];
@@ -192,6 +192,14 @@ const Dashboard = () => {
       icon: <Briefcase className="w-5 h-5 text-primary" />,
     },
   ];
+
+  if (loading || (!user && !isGuest)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

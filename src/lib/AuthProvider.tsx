@@ -71,6 +71,22 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function ensureProfile(user: User) {
+  try {
+    const { error } = await supabase.from('profiles').upsert(
+      {
+        user_id: user.id,
+        email: user.email ?? '',
+        full_name: (user.user_metadata?.full_name as string) || user.email?.split('@')[0] || 'User',
+      },
+      { onConflict: 'user_id', ignoreDuplicates: true }
+    );
+    if (error) console.error('Could not ensure profile row:', error.message);
+  } catch (err) {
+    console.error('Could not ensure profile row:', err);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,20 +95,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Restore guest session across page refreshes
     const savedGuest = sessionStorage.getItem('careerpath_guest');
-    if (savedGuest === 'true') {
-      setIsGuest(true);
-      setLoading(false);
-      return;
-    }
+    if (savedGuest === 'true') setIsGuest(true);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    // Make sure the profile row exists before exposing the user, so every
+    // screen can rely on it (signup insert fails when email confirmation is on).
+    const applySession = async (sessionUser: User | null) => {
+      if (sessionUser) await ensureProfile(sessionUser);
+      setUser(sessionUser);
       setLoading(false);
-    });
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => applySession(session?.user ?? null));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+      // Defer: awaiting Supabase calls inside this callback can deadlock the client
+      setTimeout(() => applySession(session?.user ?? null), 0);
     });
 
     return () => subscription.unsubscribe();
@@ -113,24 +130,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, name: string) => {
     sessionStorage.removeItem('careerpath_guest');
     setIsGuest(false);
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: name } },
     });
-
-    if (!signUpError && signUpData.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([{
-          user_id: signUpData.user.id,
-          email,
-          full_name: name,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }]);
-      if (profileError) console.error('Profile creation error:', profileError);
-    }
 
     return { error: signUpError };
   };

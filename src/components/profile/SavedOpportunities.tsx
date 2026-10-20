@@ -110,7 +110,7 @@ export function SavedOpportunities({ guestProfile }: Props) {
         .from("profiles")
         .select("job_matches")
         .eq("user_id", authData.user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         toast({

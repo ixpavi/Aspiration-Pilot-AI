@@ -1,5 +1,6 @@
-import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { getJobCatalog } from '@/lib/job-catalog';
+import { normalizeSkill } from '@/lib/ml-engine';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -58,25 +59,28 @@ const FALLBACK_RECOMMENDATIONS: SkillRecommendation[] = [
   { skill: 'ui/ux', relevance: 0.65, reason: 'User-centered design is increasingly valued in engineering roles', requiredBy: 40, growthTrend: 'stable', difficulty: 3 },
 ];
 
+// Title words too generic to identify a role family
+const GENERIC_TITLE_WORDS = new Set(['senior', 'junior', 'lead', 'principal', 'engineer', 'developer', 'software', 'specialist', 'associate', 'staff']);
+
 export async function getSkillRecommendations(
   profile: Profile,
   limit = 10
 ): Promise<SkillRecommendation[]> {
   // Get current skills (from both skills array and skill_assessments)
   const currentSkills = new Set([
-    ...(profile.skills || []).map(s => s.toLowerCase()),
-    ...(profile.skill_assessments || []).map((s: any) => s.skill.toLowerCase()),
+    ...(profile.skills || []).map(normalizeSkill),
+    ...(profile.skill_assessments || []).map((s: any) => normalizeSkill(String(s.skill || ''))),
+    ...(((profile.parsed_resume as any)?.skills as string[] | undefined) || []).map(normalizeSkill),
   ]);
 
   // Get target roles from career goals
   const targetRoles = profile.career_goals?.targetRoles || [];
   const targetIndustries = profile.career_goals?.industries || [];
 
-  // Get all jobs from the database
-  const { data: jobs } = await supabase.from('jobs').select('*');
+  // Jobs from the database, or the built-in catalog when the table is empty
+  const jobs = await getJobCatalog();
 
-  // If no jobs in DB, use curated fallbacks (filtered by user's existing skills)
-  if (!jobs || jobs.length === 0) {
+  if (jobs.length === 0) {
     return FALLBACK_RECOMMENDATIONS
       .filter(rec => !currentSkills.has(rec.skill.toLowerCase()))
       .slice(0, limit);
@@ -88,21 +92,26 @@ export async function getSkillRecommendations(
 
   jobs.forEach(job => {
     job.required_skills.forEach(skill => {
-      const s = skill.toLowerCase();
+      const s = normalizeSkill(skill);
       skillFrequency.set(s, (skillFrequency.get(s) || 0) + 1);
     });
 
     if (job.title) {
       const normalizedTitle = job.title.toLowerCase();
       const skillSet = skillsByRole.get(normalizedTitle) || new Set();
-      job.required_skills.forEach(skill => skillSet.add(skill.toLowerCase()));
+      job.required_skills.forEach(skill => skillSet.add(normalizeSkill(skill)));
       skillsByRole.set(normalizedTitle, skillSet);
     }
   });
 
-  // Get relevant skills based on target roles
+  // Get relevant skills based on target roles: from the role keyword map and
+  // from catalog jobs whose title resembles the target role
   const relevantSkills = new Set<string>();
   targetRoles.forEach(role => {
+    const roleWords = role.toLowerCase().split(/\W+/).filter(w => w.length > 3 && !GENERIC_TITLE_WORDS.has(w));
+    for (const [title, skillSet] of skillsByRole) {
+      if (roleWords.some(w => title.includes(w))) skillSet.forEach(s => relevantSkills.add(s));
+    }
     const roleKey = Object.keys(SKILL_RELATIONSHIPS).find(k =>
       role.toLowerCase().includes(k)
     );
@@ -119,8 +128,7 @@ export async function getSkillRecommendations(
   for (const [skill, frequency] of skillFrequency.entries()) {
     if (currentSkills.has(skill)) continue;
 
-    const skillInfo = COMMON_TECH_SKILLS[skill as keyof typeof COMMON_TECH_SKILLS];
-    if (!skillInfo) continue;
+    const skillInfo = COMMON_TECH_SKILLS[skill as keyof typeof COMMON_TECH_SKILLS] ?? { difficulty: 3 };
 
     let relevance = 0;
 
@@ -143,13 +151,11 @@ export async function getSkillRecommendations(
     } else if (complementaryScore > 0) {
       reason = 'Complements your current skill set';
     } else {
-      reason = `Required by ${frequency} job${frequency !== 1 ? 's' : ''} in your area`;
+      reason = `Required by ${frequency} job${frequency !== 1 ? 's' : ''} in the market`;
     }
 
     const growthTrend: 'rising' | 'stable' | 'declining' =
-      frequency > (jobs.length || 1) * 0.5 ? 'rising' :
-      frequency > (jobs.length || 1) * 0.2 ? 'stable' :
-      'declining';
+      frequency >= (jobs.length || 1) * 0.2 ? 'rising' : 'stable';
 
     recommendations.push({
       skill,
